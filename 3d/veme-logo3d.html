@@ -1,0 +1,175 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Veleiro em 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: palco 3D em tela cheia, régua de controles discreta no rodapé */
+:root{
+  --bg:#ECE9E1; --bg-deep:#DEDAD0; --ink:#17292F; --muted:#5B6A6C; --line:rgba(23,41,47,.16);
+  --face:#17292F; --side:#2E4A52; --shadow:rgba(23,41,47,.28);
+  --display:"Fraunces", Georgia, serif; --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#122126; --bg-deep:#0B171B; --ink:#ECE9E1; --muted:#93A3A3; --line:rgba(236,233,225,.16);
+  --face:#ECE9E1; --side:#B9B3A4; --shadow:rgba(0,0,0,.55); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#122126; --bg-deep:#0B171B; --ink:#ECE9E1; --muted:#93A3A3; --line:rgba(236,233,225,.16);
+  --face:#ECE9E1; --side:#B9B3A4; --shadow:rgba(0,0,0,.55); color-scheme:dark}
+html,body{height:100%}
+body{background:radial-gradient(120% 90% at 50% 40%,var(--bg) 40%,var(--bg-deep));background-color:var(--bg);color:var(--ink);
+  font-family:var(--mono);overflow:hidden;display:flex;flex-direction:column;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-block:18px 0;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:500;font-size:clamp(20px,3vw,26px);margin:0;letter-spacing:-.01em;text-wrap:balance}
+.hint{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+#stage{flex:1;position:relative;min-height:0;cursor:grab;touch-action:none}
+#stage.drag{cursor:grabbing}
+#stage canvas{display:block;width:100%;height:100%;outline:none}
+#floor{position:absolute;left:50%;bottom:9%;width:min(42vw,300px);height:28px;transform:translateX(-50%);
+  border-radius:50%;background:radial-gradient(closest-side,var(--shadow),transparent);pointer-events:none}
+.bar{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;justify-content:center;
+  padding-block:12px 18px;border-top:1px solid var(--line);font-size:12px}
+.ctl{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.ctl output{color:var(--ink);font-variant-numeric:tabular-nums;min-width:4.5ch;text-align:right}
+input[type=range]{width:110px;accent-color:var(--ink)}
+button{font:inherit;font-size:12px;color:var(--ink);background:transparent;border:1px solid var(--line);
+  border-radius:999px;padding:6px 14px;cursor:pointer}
+button:hover{border-color:var(--ink)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#err{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);text-align:center;padding:16px}
+</style>
+
+<header>
+  <h1>Veleiro em 3D</h1>
+  <span class="hint">Arraste para girar · role para aproximar · duplo clique reinicia</span>
+</header>
+<div id="stage" aria-label="Logo do veleiro em 3D, girando">
+  <div id="floor"></div>
+  <div id="err" hidden>Não foi possível iniciar o WebGL neste navegador.</div>
+</div>
+<div class="bar">
+  <button id="play" type="button" aria-pressed="true">Pausar</button>
+  <label class="ctl" for="speed">Giro <input id="speed" type="range" min="0" max="3" step="0.05" value="0.8"><output id="speedOut">0,8×</output></label>
+  <label class="ctl" for="depth">Profundidade <input id="depth" type="range" min="4" max="60" step="1" value="24"><output id="depthOut">24 px</output></label>
+  <button id="reset" type="button">Reiniciar vista</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const SHAPES = [{"o":[[198.5,280.0],[198.0,280.5],[198.0,283.0],[199.75,291.75],[201.25,303.0],[202.75,305.0],[212.0,311.75],[213.5,312.25],[208.75,283.25],[208.75,281.25],[207.75,280.5]],"h":[]},{"o":[[98.0,183.0],[94.75,194.25],[92.0,200.75],[90.0,203.75],[90.0,204.75],[178.5,273.5],[182.75,276.25],[183.25,275.75],[183.75,268.0],[183.75,253.5],[182.75,239.75],[178.75,217.75],[178.0,216.25],[175.0,204.75],[170.5,193.0],[169.25,192.25],[158.25,189.0],[139.0,185.0],[120.5,183.0]],"h":[]},{"o":[[420.0,140.0],[416.5,143.75],[322.75,261.75],[321.5,263.0],[313.5,263.0],[309.5,264.0],[304.5,266.0],[299.75,269.0],[294.0,274.75],[290.0,281.75],[288.25,288.75],[288.0,294.5],[289.5,303.5],[239.75,365.75],[239.0,365.75],[40.5,185.25],[39.25,184.5],[39.25,185.0],[55.0,207.25],[99.0,267.25],[155.0,341.75],[216.0,420.75],[244.5,456.5],[245.25,456.5],[318.75,323.75],[320.0,322.75],[327.5,321.5],[334.25,318.25],[337.0,316.25],[341.5,311.75],[344.75,307.0],[347.75,298.0],[348.0,290.0],[346.75,283.75],[344.75,279.25],[344.5,277.25],[417.0,145.75],[418.5,143.75]],"h":[[[313.5,275.25],[321.0,275.0],[324.25,275.75],[326.75,277.0],[332.0,281.25],[335.0,286.25],[335.75,288.5],[336.25,292.0],[336.0,296.25],[333.75,302.0],[329.75,306.75],[327.25,308.5],[323.75,310.0],[316.5,310.75],[311.5,309.75],[307.5,307.5],[305.0,305.25],[302.75,302.5],[301.0,298.75],[300.25,296.0],[300.25,289.5],[302.75,283.0],[305.25,280.0],[308.0,277.75]]]},{"o":[[109.0,96.0],[108.75,98.0],[110.0,106.0],[110.75,119.0],[110.25,137.0],[108.75,150.5],[105.75,165.5],[104.0,171.0],[104.25,172.0],[105.75,172.75],[115.0,174.5],[133.0,176.25],[147.5,176.5],[159.75,175.5],[160.25,174.25],[159.75,172.5],[156.75,141.5],[155.75,137.0],[153.5,113.0],[151.5,98.75],[150.25,98.0],[142.25,96.25],[129.0,94.75],[119.25,94.75]],"h":[]},{"o":[[147.75,53.5],[147.25,53.25],[140.75,61.25],[132.0,70.0],[122.5,77.75],[116.0,82.0],[115.75,82.75],[116.5,83.25],[150.75,85.0],[151.25,84.5]],"h":[]},{"o":[[161.5,47.25],[164.25,56.0],[166.0,59.75],[169.0,69.75],[170.25,71.5],[175.0,68.0],[177.5,66.75],[182.5,65.5],[189.75,66.0],[195.5,67.75],[201.0,70.25],[208.0,72.25],[214.5,72.5],[219.5,71.5],[224.5,69.5],[230.5,65.75],[235.0,62.0],[241.0,56.0],[243.5,52.75],[242.5,52.5],[230.5,55.75],[219.5,57.75],[214.5,58.25],[204.0,58.25],[199.25,57.5],[194.5,55.75],[191.5,53.75],[187.0,49.0],[185.0,47.5],[180.0,45.0],[176.5,44.25],[171.0,44.25],[163.5,46.0]],"h":[]},{"o":[[155.25,35.25],[155.0,36.75],[157.0,45.25],[159.0,59.0],[162.75,78.5],[164.25,89.25],[166.0,96.75],[168.25,112.0],[169.75,118.5],[173.0,139.5],[175.0,148.5],[178.0,167.75],[179.0,171.25],[181.25,186.75],[182.75,193.0],[186.0,214.0],[188.0,223.0],[189.25,232.5],[192.0,246.0],[196.25,272.0],[196.75,273.0],[198.75,273.5],[244.25,275.75],[250.5,276.5],[265.5,277.25],[265.75,276.0],[264.0,273.75],[251.0,251.0],[234.0,219.5],[219.5,191.0],[204.0,158.25],[189.0,124.0],[182.75,108.0],[181.75,106.5],[167.75,70.25],[165.75,63.5],[164.0,60.0],[156.75,37.75]],"h":[]}];
+const stage = document.getElementById('stage');
+const floor = document.getElementById('floor');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({antialias:true, alpha:true}); }
+catch(e){ document.getElementById('err').hidden = false; }
+
+if (renderer) {
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  stage.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35,1,0.1,100);
+  let camZ = 9; camera.position.set(0,0,camZ);
+
+  // Luzes: preenchimento suave, luz principal e contraluz para recortar as bordas
+  scene.add(new THREE.HemisphereLight(0xffffff,0x445055,0.75));
+  const key = new THREE.DirectionalLight(0xffffff,0.9); key.position.set(3,4,6); scene.add(key);
+  const rim = new THREE.DirectionalLight(0xfff2dd,0.7); rim.position.set(-5,2,-4); scene.add(rim);
+
+  const faceMat = new THREE.MeshStandardMaterial({roughness:.45, metalness:.15});
+  const sideMat = new THREE.MeshStandardMaterial({roughness:.35, metalness:.35});
+
+  // Converte os contornos vetorizados (pixels, y para baixo) em THREE.Shape
+  const shapes = SHAPES.map(s=>{
+    const sh = new THREE.Shape(s.o.map(([x,y])=>new THREE.Vector2(x,-y)));
+    s.h.forEach(h=>sh.holes.push(new THREE.Path(h.map(([x,y])=>new THREE.Vector2(x,-y)))));
+    return sh;
+  });
+
+  const spinner = new THREE.Group();   // giro contínuo
+  const tilt = new THREE.Group();      // interação do usuário
+  tilt.add(spinner); scene.add(tilt);
+  let mesh;
+  const SCALE = 3.6/400;
+
+  function build(depth){
+    if (mesh){ spinner.remove(mesh); mesh.geometry.dispose(); }
+    const geo = new THREE.ExtrudeGeometry(shapes,{
+      depth, bevelEnabled:true, bevelThickness:Math.min(2.2,depth*.15), bevelSize:1.1, bevelSegments:3, curveSegments:8
+    });
+    geo.center();
+    mesh = new THREE.Mesh(geo,[faceMat,sideMat]);
+    mesh.scale.setScalar(SCALE);
+    spinner.add(mesh);
+  }
+  build(24);
+
+  function readTheme(){
+    const cs = getComputedStyle(document.documentElement);
+    faceMat.color.set(cs.getPropertyValue('--face').trim()).convertSRGBToLinear();
+    sideMat.color.set(cs.getPropertyValue('--side').trim()).convertSRGBToLinear();
+  }
+  readTheme();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change',readTheme);
+  new MutationObserver(readTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+  function resize(){
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w,h,false);
+    camera.aspect = w/h;
+    // em telas estreitas, recua a câmera para o logo caber
+    camera.userData.fit = w/h < 0.8 ? 0.8/(w/h) : 1;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+
+  // Controles
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let playing = !reduce, speed = 0.8;
+  const playBtn = document.getElementById('play');
+  const syncPlay = ()=>{ playBtn.textContent = playing?'Pausar':'Girar'; playBtn.setAttribute('aria-pressed',playing); };
+  syncPlay();
+  playBtn.onclick = ()=>{ playing=!playing; syncPlay(); };
+  const sp = document.getElementById('speed'), spo = document.getElementById('speedOut');
+  sp.oninput = ()=>{ speed=+sp.value; spo.textContent = speed.toFixed(1).replace('.',',')+'×'; };
+  const dp = document.getElementById('depth'), dpo = document.getElementById('depthOut');
+  dp.oninput = ()=>{ build(+dp.value); dpo.textContent = dp.value+' px'; };
+
+  // Arrastar com inércia
+  let rx=0, ry=0, vx=0, vy=0, dragging=false, lx=0, ly=0, targetZ=9;
+  stage.addEventListener('pointerdown',e=>{ dragging=true; lx=e.clientX; ly=e.clientY; vx=vy=0; stage.setPointerCapture(e.pointerId); stage.classList.add('drag'); });
+  stage.addEventListener('pointermove',e=>{
+    if(!dragging) return;
+    const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+    vy = dx*0.008; vx = dy*0.008; ry+=vy; rx+=vx;
+  });
+  const end=()=>{ dragging=false; stage.classList.remove('drag'); };
+  stage.addEventListener('pointerup',end); stage.addEventListener('pointercancel',end);
+  stage.addEventListener('wheel',e=>{ e.preventDefault(); targetZ=Math.min(16,Math.max(5,targetZ+e.deltaY*0.006)); },{passive:false});
+  const reset=()=>{ rx=ry=vx=vy=0; spinner.rotation.y=0; targetZ=9; };
+  stage.addEventListener('dblclick',reset);
+  document.getElementById('reset').onclick=reset;
+
+  const clock = new THREE.Clock();
+  (function loop(){
+    const dt = Math.min(clock.getDelta(),0.05);
+    if (playing) spinner.rotation.y += dt*speed*Math.PI*0.5;
+    if (!dragging){ ry+=vy; rx+=vx; vx*=0.94; vy*=0.94; rx*=0.97; }
+    rx = Math.max(-1.2,Math.min(1.2,rx));
+    tilt.rotation.set(rx,ry,0);
+    camZ += (targetZ*(camera.userData.fit||1)-camZ)*0.12;
+    camera.position.z = camZ;
+    spinner.position.y = Math.sin(clock.elapsedTime*1.2)*0.05;
+    // sombra no chão acompanha a largura aparente do logo
+    const a = Math.abs(Math.cos(spinner.rotation.y+ry));
+    floor.style.transform = `translateX(-50%) scaleX(${0.45+0.55*a})`;
+    floor.style.opacity = (0.55+0.45*a)*(9/camZ);
+    renderer.render(scene,camera);
+    requestAnimationFrame(loop);
+  })();
+}
+</script>
+
+</body></html>
